@@ -89,7 +89,7 @@ PART_KEYWORDS = {
 }
 
 
-class ClaimParser:
+class KeywordClaimParser:
 
     def parse(
         self,
@@ -104,6 +104,7 @@ class ClaimParser:
         return ParsedClaim(
             issue_type=issue_type,
             object_part=object_part,
+            reason="Keyword parser match",
         )
 
     def _extract_issue(

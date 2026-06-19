@@ -1,7 +1,10 @@
-from pipeline.claim_parser import ClaimParser
+from pipeline.ClaimParser.claim_parser import (
+    ClaimParser
+)
 
 
 def main() -> None:
+
     parser = ClaimParser()
 
     claims = [
@@ -12,10 +15,12 @@ def main() -> None:
     ]
 
     for claim in claims:
+
         result = parser.parse(claim)
 
         print(f"Claim: {claim}")
         print(result)
+        print(f"Reason: {result.reason}")
         print("-" * 50)
 
 
