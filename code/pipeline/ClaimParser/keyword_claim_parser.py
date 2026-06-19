@@ -1,4 +1,4 @@
-from pipeline.parsed_claim import ParsedClaim
+from models.parsed_claim import ParsedClaim
 
 
 ISSUE_KEYWORDS = {

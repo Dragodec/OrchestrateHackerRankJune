@@ -1,38 +1,45 @@
+from pathlib import Path
 from typing import Dict
 
 from models.prediction import PredictionResult
+from models.image_verification_result import (
+    ImageVerificationResult,
+)
+
 from pipeline.ClaimParser.claim_parser import (
-    ClaimParser
+    ClaimParser,
 )
 
-
-PLACEHOLDER_EVIDENCE_STANDARD_MET = False
-PLACEHOLDER_EVIDENCE_REASON = (
-    "Claim parsing completed. Evidence evaluation pending."
+from pipeline.requirement_mapper import (
+    RequirementMapper,
 )
 
-PLACEHOLDER_RISK_FLAGS = "none"
-
-PLACEHOLDER_CLAIM_STATUS = "not_enough_information"
-PLACEHOLDER_CLAIM_STATUS_REASON = (
-    "Image analysis not implemented yet."
+from pipeline.ImageAnalyzer.gemini_image_verifier import (
+    GeminiImageVerifier,
 )
-
-PLACEHOLDER_SUPPORTING_IMAGES = "none"
-PLACEHOLDER_VALID_IMAGE = True
-
-PLACEHOLDER_SEVERITY = "unknown"
 
 
 class CarPredictor:
 
     def __init__(self):
 
-        print("Initializing CarPredictor...")
+        print(
+            "Initializing CarPredictor..."
+        )
 
         self.claim_parser = ClaimParser()
 
-        print("ClaimParser initialized.")
+        self.requirement_mapper = (
+            RequirementMapper()
+        )
+
+        self.image_verifier = (
+            GeminiImageVerifier()
+        )
+
+        print(
+            "CarPredictor initialized."
+        )
 
     def predict(
         self,
@@ -49,64 +56,240 @@ class CarPredictor:
             f"\nProcessing: {user_id}"
         )
 
-        print(
-            f"Claim Object: {claim_object}"
-        )
-
         if claim_object != "car":
 
             print(
                 "Skipping non-car claim."
             )
 
-            parsed_issue = "unknown"
-            parsed_part = "unknown"
+            prediction = PredictionResult(
+                evidence_standard_met=False,
+                evidence_standard_met_reason=(
+                    "Not a car claim."
+                ),
+                risk_flags="none",
+                issue_type="unknown",
+                object_part="unknown",
+                claim_status="not_applicable",
+                claim_status_justification=(
+                    "Row does not belong "
+                    "to car domain."
+                ),
+                supporting_image_ids="none",
+                valid_image=False,
+                severity="unknown",
+            )
+
+            return prediction.to_dict()
+
+        print(
+            "Running claim parser..."
+        )
+
+        parsed_claim = (
+            self.claim_parser.parse(
+                row["user_claim"]
+            )
+        )
+
+        print(
+            f"Issue: "
+            f"{parsed_claim.issue_type}"
+        )
+
+        print(
+            f"Part: "
+            f"{parsed_claim.object_part}"
+        )
+
+        requirement_id = (
+            self.requirement_mapper.get_requirement_id(
+                parsed_claim.issue_type
+            )
+        )
+
+        print(
+            f"Requirement: "
+            f"{requirement_id}"
+        )
+
+        project_root = (
+            Path(__file__)
+            .resolve()
+            .parent
+            .parent
+            .parent
+        )
+
+        image_paths = [
+            str(
+                project_root
+                / "dataset"
+                / relative_path
+            )
+            for relative_path in str(
+                row["image_paths"]
+            ).split(";")
+        ]
+
+        print(
+            "Resolved image paths:"
+        )
+
+        for image_path in image_paths:
+
+            print(
+                image_path
+            )
+
+        # ==================================================
+        # QUOTA GUARD
+        # Only these users will consume Gemini image requests
+        # ==================================================
+
+        if user_id in [
+            "user_005",
+            "user_003",
+        ]:
+
+            print(
+                "Running Gemini image verification..."
+            )
+
+            verification = (
+                self.image_verifier.verify(
+                    image_paths=image_paths,
+                    issue_type=(
+                        parsed_claim.issue_type
+                    ),
+                    object_part=(
+                        parsed_claim.object_part
+                    ),
+                    requirement_id=(
+                        requirement_id
+                    ),
+                )
+            )
 
         else:
 
             print(
-                "Running claim parser..."
+                "Skipping image verification."
             )
 
-            parsed_claim = self.claim_parser.parse(
-                row["user_claim"]
+            verification = (
+                ImageVerificationResult(
+                    part_visible=False,
+                    damage_visible=False,
+                    claim_matches_image=False,
+                    supporting_image_ids=[],
+                    reason=(
+                        "Image verification skipped "
+                        "to conserve quota."
+                    ),
+                )
             )
 
-            parsed_issue = (
-                parsed_claim.issue_type
+        evidence_standard_met = (
+            verification.part_visible
+            and
+            verification.damage_visible
+            and
+            verification.claim_matches_image
+        )
+
+        if (
+            verification.claim_matches_image
+        ):
+
+            claim_status = (
+                "supported"
             )
 
-            parsed_part = (
-                parsed_claim.object_part
+            claim_status_reason = (
+                verification.reason
             )
 
-            print(
-                f"Parsed Issue: {parsed_issue}"
+        else:
+
+            claim_status = (
+                "not_enough_information"
             )
 
-            print(
-                f"Parsed Part: {parsed_part}"
+            claim_status_reason = (
+                verification.reason
             )
+
+        severity = (
+            self._derive_severity(
+                parsed_claim.issue_type,
+                verification.damage_visible,
+            )
+        )
 
         prediction = PredictionResult(
-            evidence_standard_met=PLACEHOLDER_EVIDENCE_STANDARD_MET,
-            evidence_standard_met_reason=PLACEHOLDER_EVIDENCE_REASON,
-            risk_flags=PLACEHOLDER_RISK_FLAGS,
-            issue_type=parsed_issue,
-            object_part=parsed_part,
-            claim_status=PLACEHOLDER_CLAIM_STATUS,
+            evidence_standard_met=(
+                evidence_standard_met
+            ),
+            evidence_standard_met_reason=(
+                verification.reason
+            ),
+            risk_flags="none",
+            issue_type=(
+                parsed_claim.issue_type
+            ),
+            object_part=(
+                parsed_claim.object_part
+            ),
+            claim_status=(
+                claim_status
+            ),
             claim_status_justification=(
-                PLACEHOLDER_CLAIM_STATUS_REASON
+                claim_status_reason
             ),
-            supporting_image_ids=(
-                PLACEHOLDER_SUPPORTING_IMAGES
+            supporting_image_ids=";".join(
+                verification.supporting_image_ids
+            )
+            if (
+                verification.supporting_image_ids
+            )
+            else "none",
+            valid_image=(
+                verification.part_visible
             ),
-            valid_image=PLACEHOLDER_VALID_IMAGE,
-            severity=PLACEHOLDER_SEVERITY,
+            severity=severity,
         )
 
         print(
-            f"Prediction generated for {user_id}"
+            f"Prediction generated "
+            f"for {user_id}"
         )
 
         return prediction.to_dict()
+
+    def _derive_severity(
+        self,
+        issue_type: str,
+        damage_visible: bool,
+    ) -> str:
+
+        if not damage_visible:
+            return "none"
+
+        if issue_type == "scratch":
+            return "low"
+
+        if issue_type in [
+            "dent",
+            "crack",
+        ]:
+            return "medium"
+
+        if issue_type in [
+            "glass_shatter",
+            "broken_part",
+            "missing_part",
+        ]:
+            return "high"
+
+        return "unknown"

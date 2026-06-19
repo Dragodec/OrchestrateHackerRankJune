@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
-from pipeline.parsed_claim import ParsedClaim
+from models.parsed_claim import ParsedClaim
 from pipeline.car_domain import (
     CAR_ISSUES,
     CAR_OBJECT_PARTS,
