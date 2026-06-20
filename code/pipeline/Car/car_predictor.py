@@ -10,7 +10,7 @@ from pipeline.ClaimParser.claim_parser import (
     ClaimParser,
 )
 
-from pipeline.requirement_mapper import (
+from pipeline.Car.requirement_mapper import (
     RequirementMapper,
 )
 
@@ -114,12 +114,13 @@ class CarPredictor:
         )
 
         project_root = (
-            Path(__file__)
-            .resolve()
-            .parent
-            .parent
-            .parent
-        )
+        Path(__file__)
+        .resolve()
+        .parent
+        .parent
+        .parent
+        .parent
+    )
 
         image_paths = [
             str(

@@ -1,4 +1,4 @@
-from pipeline.car_domain import ISSUE_TO_REQUIREMENT
+from pipeline.Car.car_domain import ISSUE_TO_REQUIREMENT
 
 
 class RequirementMapper:
