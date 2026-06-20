@@ -2,9 +2,6 @@ from pathlib import Path
 from typing import Dict
 
 from models.prediction import PredictionResult
-from models.image_verification_result import (
-    ImageVerificationResult,
-)
 
 from pipeline.ClaimParser.claim_parser import (
     ClaimParser,
@@ -114,13 +111,13 @@ class CarPredictor:
         )
 
         project_root = (
-        Path(__file__)
-        .resolve()
-        .parent
-        .parent
-        .parent
-        .parent
-    )
+            Path(__file__)
+            .resolve()
+            .parent
+            .parent
+            .parent
+            .parent
+        )
 
         image_paths = [
             str(
@@ -143,53 +140,24 @@ class CarPredictor:
                 image_path
             )
 
-        # ==================================================
-        # QUOTA GUARD
-        # Only these users will consume Gemini image requests
-        # ==================================================
+        print(
+            "Running Gemini image verification..."
+        )
 
-        if user_id in [
-            "user_005",
-            "user_003",
-        ]:
-
-            print(
-                "Running Gemini image verification..."
+        verification = (
+            self.image_verifier.verify(
+                image_paths=image_paths,
+                issue_type=(
+                    parsed_claim.issue_type
+                ),
+                object_part=(
+                    parsed_claim.object_part
+                ),
+                requirement_id=(
+                    requirement_id
+                ),
             )
-
-            verification = (
-                self.image_verifier.verify(
-                    image_paths=image_paths,
-                    issue_type=(
-                        parsed_claim.issue_type
-                    ),
-                    object_part=(
-                        parsed_claim.object_part
-                    ),
-                    requirement_id=(
-                        requirement_id
-                    ),
-                )
-            )
-
-        else:
-
-            print(
-                "Skipping image verification."
-            )
-
-            verification = (
-                ImageVerificationResult(
-                    part_visible=False,
-                    damage_visible=False,
-                    claim_matches_image=False,
-                    supporting_image_ids=[],
-                    reason=(
-                        "Image verification skipped "
-                        "to conserve quota."
-                    ),
-                )
-            )
+        )
 
         evidence_standard_met = (
             verification.part_visible

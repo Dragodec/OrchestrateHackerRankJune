@@ -1,13 +1,15 @@
 from pathlib import Path
 from typing import Dict
 
-from models.prediction import PredictionResult
-
-from pipeline.ClaimParser.laptop_claim_parser import (
-    LaptopClaimParser,
+from models.prediction import (
+    PredictionResult,
 )
 
-from pipeline.Laptop.requirement_mapper import (
+from pipeline.ClaimParser.package_claim_parser import (
+    PackageClaimParser,
+)
+
+from pipeline.Package.requirement_mapper import (
     RequirementMapper,
 )
 
@@ -16,16 +18,16 @@ from pipeline.ImageAnalyzer.gemini_image_verifier import (
 )
 
 
-class LaptopPredictor:
+class PackagePredictor:
 
     def __init__(self):
 
         print(
-            "Initializing LaptopPredictor..."
+            "Initializing PackagePredictor..."
         )
 
         self.claim_parser = (
-            LaptopClaimParser()
+            PackageClaimParser()
         )
 
         self.requirement_mapper = (
@@ -37,7 +39,7 @@ class LaptopPredictor:
         )
 
         print(
-            "LaptopPredictor initialized."
+            "PackagePredictor initialized."
         )
 
     def predict(
@@ -55,16 +57,16 @@ class LaptopPredictor:
             f"\nProcessing: {user_id}"
         )
 
-        if claim_object != "laptop":
+        if claim_object != "package":
 
             print(
-                "Skipping non-laptop claim."
+                "Skipping non-package claim."
             )
 
             prediction = PredictionResult(
                 evidence_standard_met=False,
                 evidence_standard_met_reason=(
-                    "Not a laptop claim."
+                    "Not a package claim."
                 ),
                 risk_flags="none",
                 issue_type="unknown",
@@ -72,7 +74,7 @@ class LaptopPredictor:
                 claim_status="not_applicable",
                 claim_status_justification=(
                     "Row does not belong "
-                    "to laptop domain."
+                    "to package domain."
                 ),
                 supporting_image_ids="none",
                 valid_image=False,
@@ -101,26 +103,25 @@ class LaptopPredictor:
             f"{parsed_claim.object_part}"
         )
 
-        # ==========================================
-        # SMART REQUIREMENT SELECTION
-        # ==========================================
+        # =====================================
+        # REQUIREMENT SELECTION
+        # =====================================
 
-        if parsed_claim.object_part == "screen":
+        if parsed_claim.issue_type == (
+            "torn_packaging"
+        ):
 
-            if parsed_claim.issue_type in [
-                "water_damage",
-                "stain",
-            ]:
+            requirement_id = (
+                "REQ_PACKAGE_TORN"
+            )
 
-                requirement_id = (
-                    "REQ_LAPTOP_LIQUID_DAMAGE"
-                )
+        elif parsed_claim.issue_type == (
+            "crushed_packaging"
+        ):
 
-            else:
-
-                requirement_id = (
-                    "REQ_LAPTOP_SCREEN"
-                )
+            requirement_id = (
+                "REQ_PACKAGE_CRUSHED"
+            )
 
         elif parsed_claim.issue_type in [
             "water_damage",
@@ -128,13 +129,21 @@ class LaptopPredictor:
         ]:
 
             requirement_id = (
-                "REQ_LAPTOP_LIQUID_DAMAGE"
+                "REQ_PACKAGE_WATER"
+            )
+
+        elif parsed_claim.issue_type == (
+            "missing_part"
+        ):
+
+            requirement_id = (
+                "REQ_PACKAGE_CONTENTS"
             )
 
         else:
 
             requirement_id = (
-                "REQ_LAPTOP_HARDWARE"
+                "REQ_PACKAGE_GENERAL"
             )
 
         print(
@@ -274,21 +283,18 @@ class LaptopPredictor:
             return "none"
 
         if issue_type in [
-            "scratch",
             "stain",
         ]:
             return "low"
 
         if issue_type in [
-            "dent",
-            "crack",
+            "torn_packaging",
             "water_damage",
         ]:
             return "medium"
 
         if issue_type in [
-            "glass_shatter",
-            "broken_part",
+            "crushed_packaging",
             "missing_part",
         ]:
             return "high"

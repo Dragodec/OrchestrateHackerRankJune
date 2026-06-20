@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 import pandas as pd
 
@@ -8,14 +9,9 @@ from pipeline.predictor_factory import (
 
 
 class OutputGenerator:
-    """
-    Responsible for:
 
-    1. Loading claims.csv
-    2. Selecting predictor
-    3. Running prediction
-    4. Producing output.csv
-    """
+    BATCH_SIZE = 2
+    MAX_RETRIES = 3
 
     def generate(
         self,
@@ -27,64 +23,152 @@ class OutputGenerator:
             claims_path
         )
 
-        # TEMPORARY:
-        # Run only specific test cases
+        processed_claims = set()
 
-        claims_df = claims_df[
-            claims_df["user_id"].isin(
-                [
-                     "user_020",
-            "user_026",
-            "user_028",
+        if output_path.exists():
+
+            existing_output = pd.read_csv(
+                output_path
+            )
+
+            processed_claims = set(
+                existing_output[
+                    "image_paths"
                 ]
+            )
+
+        remaining_df = claims_df[
+            ~claims_df["image_paths"].isin(
+                processed_claims
             )
         ]
 
-        predictions = []
-
-        # =====================================
-        # Create predictor ONLY ONCE
-        # =====================================
-
-        predictor = (
-            PredictorFactory.get_predictor(
-                "laptop"
-            )
+        batch_df = remaining_df.head(
+            self.BATCH_SIZE
         )
 
-        for _, row in (
-            claims_df.iterrows()
-        ):
+        if batch_df.empty:
 
-            prediction = (
-                predictor.predict(
-                    row
+            print(
+                "All test cases processed."
+            )
+
+            return
+
+        output_rows = []
+
+        for _, row in batch_df.iterrows():
+
+            user_id = row.get(
+                "user_id",
+                "unknown"
+            )
+
+            predictor = (
+                PredictorFactory.get_predictor(
+                    row["claim_object"]
                 )
             )
 
-            predictions.append(
-                prediction
+            prediction = None
+
+            for attempt in range(
+                self.MAX_RETRIES
+            ):
+
+                try:
+
+                    print(
+                        f"Processing {user_id}..."
+                    )
+
+                    prediction = (
+                        predictor.predict(
+                            row
+                        )
+                    )
+
+                    break
+
+                except Exception as e:
+
+                    error_message = str(
+                        e
+                    )
+
+                    if (
+                        "503"
+                        in error_message
+                        or "Service Unavailable"
+                        in error_message
+                    ):
+
+                        wait_time = (
+                            2 ** attempt
+                        )
+
+                        print(
+                            f"503 received for "
+                            f"{user_id}. "
+                            f"Retrying in "
+                            f"{wait_time}s..."
+                        )
+
+                        time.sleep(
+                            wait_time
+                        )
+
+                        continue
+
+                    print(
+                        f"Failed {user_id}: "
+                        f"{e}"
+                    )
+
+                    break
+
+            if prediction is None:
+
+                print(
+                    f"Skipping {user_id} "
+                    f"after retries."
+                )
+
+                continue
+
+            output_rows.append(
+                {
+                    **row.to_dict(),
+                    **prediction,
+                }
             )
 
-        predictions_df = pd.DataFrame(
-            predictions
+        if not output_rows:
+
+            print(
+                "No successful predictions."
+            )
+
+            return
+
+        output_df = pd.DataFrame(
+            output_rows
         )
 
-        output_df = pd.concat(
-            [
-                claims_df.reset_index(
-                    drop=True
-                ),
-                predictions_df.reset_index(
-                    drop=True,
-                ),
-            ],
-            axis=1,
+        file_exists = (
+            output_path.exists()
         )
 
         output_df.to_csv(
             output_path,
+            mode="a",
+            header=not file_exists,
             index=False,
+        )
+
+        print(
+            f"Processed "
+            f"{len(output_rows)} case(s)."
         )
 
     @staticmethod
